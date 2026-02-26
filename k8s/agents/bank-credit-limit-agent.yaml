@@ -40,17 +40,3 @@ spec:
       volumeMounts:
       - name: bank-data
         mountPath: /data
-  a2aConfig:
-    skills:
-    - id: credit-limit-increase
-      name: Credit Limit Increase
-      description: Process a credit limit increase request — retrieves customer data, gets risk assessment from Credit Assessment Agent (A2A), and applies the decision
-      inputModes:
-      - text
-      outputModes:
-      - text
-      tags: ["banking", "credit", "langchain", "a2a"]
-      examples:
-      - "I'd like to increase the credit limit for customer CUST-1001 to $20,000"
-      - "Process a credit limit increase for Alice Johnson"
-      - "Customer CUST-1003 is requesting a higher credit limit"
