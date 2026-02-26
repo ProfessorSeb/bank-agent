@@ -329,4 +329,53 @@ def get_credit_limit_history(customer_id: str) -> list[dict]:
         ).fetchall()]
 
 
+def update_credit_limit(customer_id: str, new_limit: float, reason: str, assessed_by: str = "credit-assessment-agent") -> dict:
+    now = datetime.now(timezone.utc).isoformat()
+    with get_db() as conn:
+        customer = conn.execute("SELECT * FROM customers WHERE id = ?", (customer_id,)).fetchone()
+        if not customer:
+            return {"error": "Customer not found"}
+
+        old_limit = customer["current_credit_limit"]
+        if new_limit <= old_limit:
+            return {"error": f"New limit (${new_limit:,.2f}) must be higher than current limit (${old_limit:,.2f})"}
+        if new_limit > old_limit * 3:
+            return {"error": f"Cannot increase by more than 3x. Current: ${old_limit:,.2f}, Max: ${old_limit * 3:,.2f}"}
+
+        conn.execute("UPDATE customers SET current_credit_limit = ? WHERE id = ?", (new_limit, customer_id))
+
+        # Update utilization rate based on new limit
+        credit_acc = conn.execute(
+            "SELECT * FROM accounts WHERE customer_id = ? AND type = 'credit'", (customer_id,)
+        ).fetchone()
+        if credit_acc:
+            new_util = abs(credit_acc["balance"]) / new_limit if new_limit > 0 else 0
+            conn.execute("UPDATE customers SET utilization_rate = ? WHERE id = ?", (round(new_util, 4), customer_id))
+
+        conn.execute(
+            "INSERT INTO credit_limit_changes (customer_id,timestamp,old_limit,new_limit,reason,status,assessed_by) VALUES (?,?,?,?,?,?,?)",
+            (customer_id, now, old_limit, new_limit, reason, "APPROVED", assessed_by),
+        )
+
+        # Record as a transaction on the credit account
+        if credit_acc:
+            conn.execute(
+                "INSERT INTO transactions (account_id,customer_id,timestamp,type,description,amount,balance_after) VALUES (?,?,?,?,?,?,?)",
+                (credit_acc["id"], customer_id, now, "CREDIT_LIMIT_CHANGE",
+                 f"Credit limit increased: ${old_limit:,.2f} → ${new_limit:,.2f} ({reason})",
+                 new_limit - old_limit, credit_acc["balance"]),
+            )
+
+    return {
+        "status": "SUCCESS",
+        "customer_id": customer_id,
+        "previous_limit": old_limit,
+        "new_limit": new_limit,
+        "increase_amount": new_limit - old_limit,
+        "reason": reason,
+        "assessed_by": assessed_by,
+        "timestamp": now,
+    }
+
+
 init_db()

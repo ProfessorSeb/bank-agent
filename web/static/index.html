@@ -13,130 +13,158 @@
     <div class="logo-icon">SB</div>
     Solo Bank
   </div>
-  <div class="user-info">
+  <div class="header-right">
+    <div class="portal-toggle">
+      <button class="toggle-btn active" id="toggleCustomer" onclick="switchPortal('customer')">Customer</button>
+      <button class="toggle-btn" id="toggleAdmin" onclick="switchPortal('admin')">Agent / Admin</button>
+    </div>
     <select id="customerSelect" onchange="switchCustomer(this.value)">
       <option value="">Loading...</option>
     </select>
   </div>
 </header>
 
-<nav>
-  <button class="active" onclick="showPage('dashboard', this)">Dashboard</button>
-  <button onclick="showPage('transfer', this)">Transfer</button>
-  <button onclick="showPage('approvals', this)">Approvals <span id="approvalBadge"></span></button>
-  <button onclick="showPage('credit', this)">Credit Limit</button>
-  <button onclick="showPage('transactions', this)">Transactions</button>
-</nav>
+<!-- ============ CUSTOMER PORTAL ============ -->
+<div id="portal-customer" class="portal active">
+  <nav>
+    <button class="active" onclick="showPage('c-dashboard', this)">Dashboard</button>
+    <button onclick="showPage('c-transactions', this)">Transactions</button>
+    <button onclick="showPage('c-credit', this)">Credit Info</button>
+  </nav>
+  <main>
+    <!-- Dashboard -->
+    <div id="page-c-dashboard" class="page active">
+      <h1 class="page-title" id="customerGreeting">Welcome back</h1>
+      <div class="accounts-grid" id="accountsGrid"></div>
+      <div class="card">
+        <h2>Recent Activity</h2>
+        <table class="txn-table">
+          <thead><tr><th>Date</th><th>Account</th><th>Type</th><th>Description</th><th>Amount</th></tr></thead>
+          <tbody id="recentTxns"></tbody>
+        </table>
+      </div>
+    </div>
 
-<main>
-  <!-- Dashboard -->
-  <div id="page-dashboard" class="page active">
-    <div class="accounts-grid" id="accountsGrid"></div>
-    <div class="card">
-      <h2>Recent Transactions</h2>
-      <table class="txn-table">
-        <thead>
-          <tr><th>Date</th><th>Account</th><th>Type</th><th>Description</th><th>Amount</th></tr>
-        </thead>
-        <tbody id="recentTxns"></tbody>
-      </table>
+    <!-- All Transactions -->
+    <div id="page-c-transactions" class="page">
+      <div class="card">
+        <h2>Transaction History</h2>
+        <table class="txn-table">
+          <thead><tr><th>Date</th><th>Account</th><th>Type</th><th>Description</th><th>Amount</th><th>Balance</th></tr></thead>
+          <tbody id="allTxns"></tbody>
+        </table>
+      </div>
     </div>
-  </div>
 
-  <!-- Transfer -->
-  <div id="page-transfer" class="page">
-    <div class="card">
-      <h2>Transfer Funds</h2>
-      <form id="transferForm" onsubmit="submitTransfer(event)">
-        <div class="form-grid">
-          <div class="form-group">
-            <label>From Account</label>
-            <select id="fromAccount" required></select>
-          </div>
-          <div class="form-group">
-            <label>To Account</label>
-            <select id="toAccount" required></select>
-          </div>
-          <div class="form-group">
-            <label>Amount ($)</label>
-            <input type="number" id="transferAmount" step="0.01" min="0.01" required placeholder="0.00">
-          </div>
-          <div class="form-group">
-            <label>Description</label>
-            <input type="text" id="transferDesc" placeholder="What is this transfer for?">
-          </div>
-          <div class="form-group full">
-            <button type="submit" class="btn btn-primary" id="transferBtn">Transfer Funds</button>
-          </div>
-        </div>
-      </form>
+    <!-- Credit Info -->
+    <div id="page-c-credit" class="page">
+      <div class="card">
+        <h2>Credit Profile</h2>
+        <div class="credit-info" id="creditInfoCustomer"></div>
+      </div>
+      <div class="card">
+        <h2>Credit Limit History</h2>
+        <table class="txn-table">
+          <thead><tr><th>Date</th><th>Previous</th><th>New</th><th>Reason</th><th>Status</th></tr></thead>
+          <tbody id="creditHistoryCustomer"></tbody>
+        </table>
+      </div>
     </div>
-    <div class="card">
-      <h2>Transfer History</h2>
-      <table class="txn-table">
-        <thead>
-          <tr><th>Date</th><th>Account</th><th>Type</th><th>Description</th><th>Amount</th></tr>
-        </thead>
-        <tbody id="transferHistory"></tbody>
-      </table>
-    </div>
-  </div>
+  </main>
+</div>
 
-  <!-- Approvals -->
-  <div id="page-approvals" class="page">
-    <div class="card">
-      <h2>Pending Approvals</h2>
-      <div id="approvalsList"></div>
-    </div>
-  </div>
-
-  <!-- Credit Limit -->
-  <div id="page-credit" class="page">
-    <div class="card">
-      <h2>Credit Profile</h2>
-      <div class="credit-info" id="creditInfo"></div>
-    </div>
-    <div class="card">
-      <h2>AI Credit Limit Agent</h2>
-      <p style="font-size:0.85rem;color:var(--text-light);margin-bottom:1rem;">
-        Chat with the AI agent to request a credit limit increase. The agent will review your profile
-        and coordinate with the Credit Assessment Agent for a risk evaluation.
-      </p>
-      <div class="chat-container">
-        <div class="chat-messages" id="chatMessages">
-          <div class="chat-msg system">Welcome! Ask me about increasing your credit limit. I'll review your account and provide a recommendation.</div>
-        </div>
-        <div class="chat-input">
-          <input type="text" id="chatInput" placeholder="Ask about your credit limit..."
-                 onkeydown="if(event.key==='Enter')sendChat()">
-          <button class="btn btn-primary" onclick="sendChat()" id="chatSendBtn">Send</button>
+<!-- ============ AGENT / ADMIN PORTAL ============ -->
+<div id="portal-admin" class="portal">
+  <nav>
+    <button class="active" onclick="showPage('a-chat', this)">AI Agent Chat</button>
+    <button onclick="showPage('a-approvals', this)">Approvals <span id="approvalBadge"></span></button>
+    <button onclick="showPage('a-transfer', this)">Transfer Funds</button>
+    <button onclick="showPage('a-audit', this)">Audit Log</button>
+  </nav>
+  <main>
+    <!-- AI Agent Chat -->
+    <div id="page-a-chat" class="page active">
+      <div class="card">
+        <h2>AI Credit Limit Agent</h2>
+        <p class="subtitle">Chat with the AI agent to request credit limit increases. The agent reviews customer data from the bank backend, calls the Credit Assessment Agent (A2A) for risk evaluation, and applies approved changes.</p>
+        <div class="chat-container">
+          <div class="chat-messages" id="chatMessages">
+            <div class="chat-msg system">Welcome! I'm the Bank Credit Limit Agent. I can help you process credit limit increase requests. Tell me the customer ID and desired new limit.</div>
+          </div>
+          <div class="chat-input">
+            <input type="text" id="chatInput" placeholder="e.g. Increase credit limit for CUST-1001 to $20,000" onkeydown="if(event.key==='Enter')sendChat()">
+            <button class="btn btn-primary" onclick="sendChat()" id="chatSendBtn">Send</button>
+          </div>
         </div>
       </div>
     </div>
-    <div class="card">
-      <h2>Credit Limit History</h2>
-      <table class="txn-table">
-        <thead>
-          <tr><th>Date</th><th>Previous Limit</th><th>New Limit</th><th>Reason</th><th>Status</th></tr>
-        </thead>
-        <tbody id="creditHistory"></tbody>
-      </table>
-    </div>
-  </div>
 
-  <!-- All Transactions -->
-  <div id="page-transactions" class="page">
-    <div class="card">
-      <h2>All Transactions</h2>
-      <table class="txn-table">
-        <thead>
-          <tr><th>Date</th><th>Account</th><th>Type</th><th>Description</th><th>Amount</th><th>Balance</th></tr>
-        </thead>
-        <tbody id="allTxns"></tbody>
-      </table>
+    <!-- Approvals -->
+    <div id="page-a-approvals" class="page">
+      <div class="card">
+        <h2>Pending Approvals</h2>
+        <p class="subtitle">Review and approve or deny pending large transactions and wire transfers.</p>
+        <div id="approvalsList"></div>
+      </div>
     </div>
-  </div>
-</main>
+
+    <!-- Transfer Funds -->
+    <div id="page-a-transfer" class="page">
+      <div class="card">
+        <h2>Transfer Funds</h2>
+        <p class="subtitle">Transfer money between customer accounts.</p>
+        <form id="transferForm" onsubmit="submitTransfer(event)">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>From Account</label>
+              <select id="fromAccount" required></select>
+            </div>
+            <div class="form-group">
+              <label>To Account</label>
+              <select id="toAccount" required></select>
+            </div>
+            <div class="form-group">
+              <label>Amount ($)</label>
+              <input type="number" id="transferAmount" step="0.01" min="0.01" required placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <input type="text" id="transferDesc" placeholder="Transfer reason">
+            </div>
+            <div class="form-group full">
+              <button type="submit" class="btn btn-primary" id="transferBtn">Transfer Funds</button>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Recent Transfers</h2>
+        <table class="txn-table">
+          <thead><tr><th>Date</th><th>Account</th><th>Type</th><th>Description</th><th>Amount</th></tr></thead>
+          <tbody id="transferHistory"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Audit Log -->
+    <div id="page-a-audit" class="page">
+      <div class="card">
+        <h2>Credit Limit Changes (Audit)</h2>
+        <table class="txn-table">
+          <thead><tr><th>Date</th><th>Customer</th><th>Previous</th><th>New</th><th>Reason</th><th>Status</th><th>Assessed By</th></tr></thead>
+          <tbody id="auditLog"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h2>All Transactions</h2>
+        <table class="txn-table">
+          <thead><tr><th>Date</th><th>Account</th><th>Type</th><th>Description</th><th>Amount</th><th>Balance</th></tr></thead>
+          <tbody id="adminTxns"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
 
 <script src="/static/app.js"></script>
 </body>

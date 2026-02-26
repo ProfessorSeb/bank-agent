@@ -33,9 +33,10 @@ class ApprovalAction(BaseModel):
     action: str  # "approve" or "deny"
 
 
-class CreditLimitRequest(BaseModel):
-    customer_id: str
-    requested_limit: float
+class CreditLimitUpdate(BaseModel):
+    new_limit: float
+    reason: str
+    assessed_by: str = "credit-assessment-agent"
 
 
 class ChatMessage(BaseModel):
@@ -98,6 +99,14 @@ def resolve_approval(approval_id: int, req: ApprovalAction):
 @app.get("/api/customers/{customer_id}/credit-history")
 def credit_history(customer_id: str):
     return db.get_credit_limit_history(customer_id)
+
+
+@app.post("/api/customers/{customer_id}/credit-limit")
+def update_credit_limit(customer_id: str, req: CreditLimitUpdate):
+    result = db.update_credit_limit(customer_id, req.new_limit, req.reason, req.assessed_by)
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+    return result
 
 
 @app.post("/api/chat")

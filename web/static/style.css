@@ -60,13 +60,13 @@ header {
   font-size: 1rem;
 }
 
-.user-info {
+.header-right {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
-.user-info select {
+.header-right select {
   background: rgba(255,255,255,0.15);
   color: white;
   border: 1px solid rgba(255,255,255,0.3);
@@ -76,7 +76,50 @@ header {
   cursor: pointer;
 }
 
-.user-info select option { color: var(--text); background: white; }
+.header-right select option { color: var(--text); background: white; }
+
+/* ---- Portal toggle ---- */
+.portal-toggle {
+  display: flex;
+  background: rgba(255,255,255,0.1);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.toggle-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.7);
+  padding: 0.4rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toggle-btn.active {
+  background: rgba(255,255,255,0.25);
+  color: white;
+}
+
+.toggle-btn:hover { color: white; }
+
+.portal { display: none; }
+.portal.active { display: block; }
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 1.5rem;
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  margin-bottom: 1rem;
+}
 
 /* ---- Navigation ---- */
 nav {

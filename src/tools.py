@@ -157,28 +157,12 @@ def update_credit_limit(customer_id: str, new_limit: float, reason: str) -> str:
         new_limit: The new credit limit amount in dollars
         reason: The reason for the credit limit change
     """
-    # Validate via the bank backend
-    customer = _bank_api("GET", f"/api/customers/{customer_id}")
-    old_limit = customer["current_credit_limit"]
-
-    if new_limit <= old_limit:
-        return f"New limit (${new_limit:,.2f}) must be higher than current limit (${old_limit:,.2f})"
-    if new_limit > old_limit * 3:
-        return f"Cannot increase by more than 3x. Current: ${old_limit:,.2f}, Max: ${old_limit * 3:,.2f}"
-
-    # For now the agent writes directly via the data module fallback,
-    # but in production this would be a dedicated API endpoint.
-    # The credit limit update is recorded in the agent's local db
-    # and will be reflected when the web backend is shared-db enabled.
-    return json.dumps({
-        "status": "SUCCESS",
-        "customer_id": customer_id,
-        "customer_name": customer["name"],
-        "previous_limit": old_limit,
+    result = _bank_api("POST", f"/api/customers/{customer_id}/credit-limit", {
         "new_limit": new_limit,
-        "increase_amount": new_limit - old_limit,
         "reason": reason,
-    }, indent=2)
+        "assessed_by": "credit-assessment-agent",
+    })
+    return json.dumps(result, indent=2)
 
 
 @tool
