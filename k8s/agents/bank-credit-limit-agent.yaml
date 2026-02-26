@@ -33,4 +33,4 @@ spec:
       - name: PORT
         value: "8080"
       - name: BANK_API_URL
-        value: "http://172.16.10.128:9090"
+        value: "http://solo-bank-web.kagent.svc.cluster.local:8080"
