@@ -140,12 +140,11 @@ def chat_with_agent(req: ChatMessage):
 
     payload = {
         "jsonrpc": "2.0",
-        "method": "tasks/send",
+        "method": "message/send",
         "params": {
-            "id": task_id,
             "message": {
                 "role": "user",
-                "parts": [{"type": "text", "text": req.message}],
+                "parts": [{"kind": "text", "text": req.message}],
             },
         },
         "id": str(uuid.uuid4()),
@@ -157,20 +156,20 @@ def chat_with_agent(req: ChatMessage):
             resp.raise_for_status()
             result = resp.json()
 
-        # Extract response text
+        # Extract response text from A2A message/send result
         if "result" in result:
             task_result = result["result"]
+            # Check artifacts first (contains final response)
+            for artifact in task_result.get("artifacts", []):
+                for part in artifact.get("parts", []):
+                    if part.get("kind") == "text":
+                        return {"response": part["text"], "task_id": task_id}
             # Check status message
             if "status" in task_result and "message" in task_result["status"]:
                 parts = task_result["status"]["message"].get("parts", [])
-                text = "\n".join(p.get("text", "") for p in parts if p.get("type") == "text")
+                text = "\n".join(p.get("text", "") for p in parts if p.get("kind") == "text")
                 if text:
                     return {"response": text, "task_id": task_id}
-            # Check artifacts
-            for artifact in task_result.get("artifacts", []):
-                for part in artifact.get("parts", []):
-                    if part.get("type") == "text":
-                        return {"response": part["text"], "task_id": task_id}
 
         return {"response": f"Agent responded: {result}", "task_id": task_id}
 

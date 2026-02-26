@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: web
-        image: sebbycorp/solo-bank-web:7d5dd8f
+        image: sebbycorp/solo-bank-web:a2a-fix
         ports:
         - containerPort: 8080
         env:
