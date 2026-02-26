@@ -8,7 +8,7 @@ spec:
   type: BYO
   byo:
     deployment:
-      image: sebbycorp/bank-credit-limit-agent:cbcb9aa
+      image: sebbycorp/bank-credit-limit-agent:53d2ea7
       resources:
         requests:
           cpu: 100m
