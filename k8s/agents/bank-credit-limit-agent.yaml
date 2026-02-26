@@ -1,0 +1,48 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: bank-credit-limit-agent
+  namespace: kagent
+spec:
+  description: Bank Credit Limit Agent (LangChain/LangGraph) - Handles credit limit increase requests, gathers customer data, and coordinates with the Credit Assessment Agent via A2A
+  type: BYO
+  byo:
+    deployment:
+      image: ghcr.io/professorseb/bank-credit-limit-agent:latest
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+      env:
+      - name: OPENAI_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: kagent-openai
+            key: OPENAI_API_KEY
+      - name: LLM_BASE_URL
+        value: "http://agentgateway-proxy.agentgateway-system.svc.cluster.local:8080/openai"
+      - name: LLM_MODEL
+        value: "gpt-4o-mini-2024-07-18"
+      - name: KAGENT_CONTROLLER_URL
+        value: "http://kagent-controller.kagent.svc.cluster.local:8083"
+      - name: AGENT_NAMESPACE
+        value: "kagent"
+      - name: PORT
+        value: "8080"
+  a2aConfig:
+    skills:
+    - id: credit-limit-increase
+      name: Credit Limit Increase
+      description: Process a credit limit increase request — retrieves customer data, gets risk assessment from Credit Assessment Agent (A2A), and applies the decision
+      inputModes:
+      - text
+      outputModes:
+      - text
+      tags: ["banking", "credit", "langchain", "a2a"]
+      examples:
+      - "I'd like to increase the credit limit for customer CUST-1001 to $20,000"
+      - "Process a credit limit increase for Alice Johnson"
+      - "Customer CUST-1003 is requesting a higher credit limit"
