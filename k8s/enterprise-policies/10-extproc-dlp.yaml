@@ -1,0 +1,91 @@
+##############################################################################
+# 10. EXTERNAL PROCESSING (ExtProc) for DLP / Custom Guardrails
+#
+# API Group:   enterpriseagentgateway.solo.io/v1alpha1
+# Kind:        EnterpriseAgentgatewayPolicy
+#
+# Purpose:     Use an external gRPC processing server to implement
+#              custom Data Loss Prevention (DLP) and guardrail logic
+#              that goes beyond regex-based prompt guards.
+#
+# Banking Use Case:
+#   - Deploy a custom DLP server that scans request/response bodies
+#     for financial data patterns (IBAN, SWIFT codes, routing numbers).
+#   - Implement custom compliance checks (e.g., detect discriminatory
+#     language in credit assessments).
+#   - Integrate with the bank's existing DLP/compliance tooling.
+#   - Can terminate requests that violate compliance policies.
+#   - No WebAssembly or custom scripts needed -- pure gRPC.
+#
+# Docs: https://docs.solo.io/agentgateway/2.1.x/traffic-management/extproc/
+##############################################################################
+---
+# ExtProc server deployment (placeholder -- replace with your DLP server)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bank-dlp-extproc
+  namespace: agentgateway-system
+  labels:
+    app: bank-dlp-extproc
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bank-dlp-extproc
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bank-dlp-extproc
+    spec:
+      containers:
+        - name: dlp-extproc
+          # Replace with your bank's custom DLP ExtProc server image
+          image: ghcr.io/your-org/bank-dlp-extproc:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 18080
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bank-dlp-extproc
+  namespace: agentgateway-system
+  labels:
+    app: bank-dlp-extproc
+spec:
+  ports:
+    - port: 4444
+      targetPort: 18080
+      protocol: TCP
+      appProtocol: kubernetes.io/h2c
+  selector:
+    app.kubernetes.io/name: bank-dlp-extproc
+---
+# Apply ExtProc to the gateway for DLP scanning
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-dlp-extproc-policy
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: dlp
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agentgateway-proxy
+  traffic:
+    extProc:
+      backendRef:
+        name: bank-dlp-extproc
+        namespace: agentgateway-system
+        port: 4444

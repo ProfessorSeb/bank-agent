@@ -1,0 +1,62 @@
+##############################################################################
+# 4. RBAC ACCESS CONTROL (CEL-based Authorization)
+#
+# API Group:   enterpriseagentgateway.solo.io/v1alpha1
+# Kind:        EnterpriseAgentgatewayPolicy
+#
+# Purpose:     Use CEL expressions to enforce role-based access control
+#              on the credit limit agent. Only authorized bankers with
+#              the correct role/header can access the agent.
+#
+# Banking Use Case:
+#   - Only users with role "credit-officer" or "branch-manager" can
+#     submit credit limit increase requests.
+#   - Only internal agents (via x-agent-type header) can call the
+#     Credit Assessment Agent via A2A.
+#   - Source IP restrictions can limit access to bank internal networks.
+#
+# Docs: https://docs.solo.io/agentgateway/2.1.x/llm/rbac/
+##############################################################################
+---
+# RBAC: Only credit officers and branch managers can access the credit agent
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-credit-agent-rbac
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: authorization
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: openai
+  traffic:
+    authorization:
+      action: Allow
+      policy:
+        matchExpressions:
+          # Allow if the user has an authorized banking role
+          - "request.headers['x-user-role'] == 'credit-officer' || request.headers['x-user-role'] == 'branch-manager' || request.headers['x-user-role'] == 'admin'"
+---
+# RBAC: Only internal agents can call the Credit Assessment Agent (A2A)
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-a2a-rbac
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: authorization
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agent-a2a-route
+  traffic:
+    authorization:
+      action: Allow
+      policy:
+        matchExpressions:
+          - "request.headers['x-agent-type'] == 'internal-bank-agent'"

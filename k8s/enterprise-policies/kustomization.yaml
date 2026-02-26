@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - 01-prompt-guard-pii.yaml
+  - 02-rate-limiting.yaml
+  - 03-jwt-auth.yaml
+  - 04-rbac-authorization.yaml
+  - 05-tracing-observability.yaml
+  - 06-model-failover.yaml
+  - 07-csrf-cors-protection.yaml
+  - 08-transformations-audit.yaml
+  - 09-prompt-enrichment.yaml
+  - 10-extproc-dlp.yaml

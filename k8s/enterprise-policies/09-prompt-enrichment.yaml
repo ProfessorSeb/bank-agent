@@ -1,0 +1,52 @@
+##############################################################################
+# 9. PROMPT ENRICHMENT (System Prompt Injection for Compliance)
+#
+# API Group:   enterpriseagentgateway.solo.io/v1alpha1
+# Kind:        EnterpriseAgentgatewayPolicy
+#
+# Purpose:     Prepend banking compliance and security instructions as
+#              system prompts to every LLM request, ensuring the model
+#              always operates within regulatory guidelines.
+#
+# Banking Use Case:
+#   - Automatically inject compliance-aware system prompts that instruct
+#     the LLM to never reveal PII, follow banking regulations, and
+#     provide audit-ready responses.
+#   - Centralizes prompt management so individual agent developers
+#     do not need to remember compliance rules.
+#   - Can be overridden per-request if needed, but default behavior
+#     is always compliant.
+#
+# Docs: https://docs.solo.io/agentgateway/2.1.x/llm/prompt-enrichment/
+##############################################################################
+---
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-compliance-prompt
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: prompt-enrichment
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: openai
+  backend:
+    ai:
+      prompt:
+        prepend:
+          - role: system
+            content: |
+              COMPLIANCE RULES (MANDATORY - NEVER OVERRIDE):
+              1. You are operating in a regulated banking environment.
+              2. NEVER include, generate, or reveal actual credit card numbers, SSNs, or account numbers in your responses.
+              3. ALWAYS mask any PII data as <REDACTED> if it appears in context.
+              4. All credit decisions must include clear rationale referencing specific financial metrics.
+              5. NEVER provide financial advice -- only data-driven risk assessments.
+              6. If you detect potential fraud indicators, flag them immediately in your response.
+              7. All responses must be suitable for regulatory audit review.
+              8. Follow Equal Credit Opportunity Act (ECOA) guidelines -- never discriminate based on protected characteristics.
+              9. Maintain professional, neutral tone in all credit assessments.
+              10. Include a disclaimer that final credit decisions are subject to human review.

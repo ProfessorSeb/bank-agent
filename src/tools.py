@@ -5,8 +5,20 @@ import uuid
 import httpx
 from langchain_core.tools import tool
 
-from data import CUSTOMERS, CREDIT_LIMIT_UPDATES
+from data import (
+    get_customer,
+    get_all_customer_ids,
+    get_balances,
+    get_transactions,
+    get_payment_history_rows,
+    update_credit_limit_db,
+    get_credit_limit_history,
+)
 from config import KAGENT_CONTROLLER_URL, AGENT_NAMESPACE, CREDIT_ASSESSMENT_AGENT
+
+
+def _ids_hint() -> str:
+    return f"Valid IDs: {', '.join(get_all_customer_ids())}"
 
 
 @tool
@@ -16,9 +28,9 @@ def get_customer_profile(customer_id: str) -> str:
     Args:
         customer_id: The customer ID (e.g. CUST-1001)
     """
-    customer = CUSTOMERS.get(customer_id)
+    customer = get_customer(customer_id)
     if not customer:
-        return f"Customer {customer_id} not found. Valid IDs: {', '.join(CUSTOMERS.keys())}"
+        return f"Customer {customer_id} not found. {_ids_hint()}"
 
     return json.dumps(
         {
@@ -42,9 +54,9 @@ def get_credit_score(customer_id: str) -> str:
     Args:
         customer_id: The customer ID (e.g. CUST-1001)
     """
-    customer = CUSTOMERS.get(customer_id)
+    customer = get_customer(customer_id)
     if not customer:
-        return f"Customer {customer_id} not found. Valid IDs: {', '.join(CUSTOMERS.keys())}"
+        return f"Customer {customer_id} not found. {_ids_hint()}"
 
     return json.dumps(
         {
@@ -65,24 +77,81 @@ def get_payment_history(customer_id: str) -> str:
     Args:
         customer_id: The customer ID (e.g. CUST-1001)
     """
-    customer = CUSTOMERS.get(customer_id)
+    customer = get_customer(customer_id)
     if not customer:
-        return f"Customer {customer_id} not found. Valid IDs: {', '.join(CUSTOMERS.keys())}"
+        return f"Customer {customer_id} not found. {_ids_hint()}"
 
-    history = customer["payment_history"]
+    history = get_payment_history_rows(customer_id)
     on_time = sum(1 for p in history if p["on_time"])
     total = len(history)
 
     return json.dumps(
         {
             "customer_id": customer["id"],
-            "payment_history": history,
+            "payment_history": [
+                {"month": p["month"], "amount_due": p["amount_due"],
+                 "amount_paid": p["amount_paid"], "on_time": bool(p["on_time"])}
+                for p in history
+            ],
             "summary": {
                 "total_payments": total,
                 "on_time_payments": on_time,
                 "late_payments": total - on_time,
                 "on_time_rate": round(on_time / total, 2) if total > 0 else 0,
             },
+        },
+        indent=2,
+    )
+
+
+@tool
+def get_account_balances(customer_id: str) -> str:
+    """Retrieve a customer's account balances (checking, savings, credit owed).
+
+    Args:
+        customer_id: The customer ID (e.g. CUST-1001)
+    """
+    customer = get_customer(customer_id)
+    if not customer:
+        return f"Customer {customer_id} not found. {_ids_hint()}"
+
+    balances = get_balances(customer_id)
+    if not balances:
+        return f"No balance data for {customer_id}"
+
+    return json.dumps(
+        {
+            "customer_id": customer_id,
+            "customer_name": customer["name"],
+            "checking_balance": balances["checking_balance"],
+            "savings_balance": balances["savings_balance"],
+            "credit_balance_owed": balances["credit_balance_owed"],
+            "total_assets": balances["checking_balance"] + balances["savings_balance"],
+            "last_updated": balances["last_updated"],
+        },
+        indent=2,
+    )
+
+
+@tool
+def get_recent_transactions(customer_id: str, limit: int = 10) -> str:
+    """Retrieve a customer's recent transactions (deposits, purchases, payments, withdrawals).
+
+    Args:
+        customer_id: The customer ID (e.g. CUST-1001)
+        limit: Number of transactions to return (default 10)
+    """
+    customer = get_customer(customer_id)
+    if not customer:
+        return f"Customer {customer_id} not found. {_ids_hint()}"
+
+    txns = get_transactions(customer_id, limit)
+    return json.dumps(
+        {
+            "customer_id": customer_id,
+            "customer_name": customer["name"],
+            "transactions": txns,
+            "count": len(txns),
         },
         indent=2,
     )
@@ -98,9 +167,9 @@ def update_credit_limit(customer_id: str, new_limit: float, reason: str) -> str:
         new_limit: The new credit limit amount in dollars
         reason: The reason for the credit limit change
     """
-    customer = CUSTOMERS.get(customer_id)
+    customer = get_customer(customer_id)
     if not customer:
-        return f"Customer {customer_id} not found. Valid IDs: {', '.join(CUSTOMERS.keys())}"
+        return f"Customer {customer_id} not found. {_ids_hint()}"
 
     old_limit = customer["current_credit_limit"]
     if new_limit <= old_limit:
@@ -109,15 +178,7 @@ def update_credit_limit(customer_id: str, new_limit: float, reason: str) -> str:
     if new_limit > old_limit * 3:
         return f"Cannot increase limit by more than 3x. Current: ${old_limit:,.2f}, Max: ${old_limit * 3:,.2f}"
 
-    customer["current_credit_limit"] = new_limit
-    update_record = {
-        "customer_id": customer_id,
-        "old_limit": old_limit,
-        "new_limit": new_limit,
-        "reason": reason,
-        "status": "APPLIED",
-    }
-    CREDIT_LIMIT_UPDATES.append(update_record)
+    result = update_credit_limit_db(customer_id, old_limit, new_limit, reason)
 
     return json.dumps(
         {
@@ -128,6 +189,31 @@ def update_credit_limit(customer_id: str, new_limit: float, reason: str) -> str:
             "new_limit": new_limit,
             "increase_amount": new_limit - old_limit,
             "reason": reason,
+            "timestamp": result["timestamp"],
+        },
+        indent=2,
+    )
+
+
+@tool
+def get_credit_limit_change_history(customer_id: str) -> str:
+    """Retrieve the history of all credit limit changes for a customer.
+
+    Args:
+        customer_id: The customer ID (e.g. CUST-1001)
+    """
+    customer = get_customer(customer_id)
+    if not customer:
+        return f"Customer {customer_id} not found. {_ids_hint()}"
+
+    changes = get_credit_limit_history(customer_id)
+    return json.dumps(
+        {
+            "customer_id": customer_id,
+            "customer_name": customer["name"],
+            "current_limit": customer["current_credit_limit"],
+            "change_history": changes,
+            "total_changes": len(changes),
         },
         indent=2,
     )
@@ -146,9 +232,12 @@ def request_credit_assessment(
         customer_id: The customer ID to assess
         requested_new_limit: The new credit limit the customer is requesting
     """
-    customer = CUSTOMERS.get(customer_id)
+    customer = get_customer(customer_id)
     if not customer:
-        return f"Customer {customer_id} not found. Valid IDs: {', '.join(CUSTOMERS.keys())}"
+        return f"Customer {customer_id} not found. {_ids_hint()}"
+
+    balances = get_balances(customer_id)
+    history = get_payment_history_rows(customer_id)
 
     # Build the assessment request with full customer data
     assessment_request = (
@@ -164,10 +253,20 @@ def request_credit_assessment(
         f"Account Age: {customer['account_age_months']} months\n"
         f"Credit Utilization Rate: {customer['utilization_rate']:.0%}\n"
         f"Recent Credit Inquiries: {customer['recent_inquiries']}\n"
-        f"Delinquencies (Last 2 Years): {customer['delinquencies_last_2y']}\n\n"
-        f"Payment History (Last 6 Months):\n"
+        f"Delinquencies (Last 2 Years): {customer['delinquencies_last_2y']}\n"
     )
-    for p in customer["payment_history"]:
+
+    if balances:
+        assessment_request += (
+            f"\nAccount Balances:\n"
+            f"  Checking: ${balances['checking_balance']:,.2f}\n"
+            f"  Savings: ${balances['savings_balance']:,.2f}\n"
+            f"  Credit Owed: ${balances['credit_balance_owed']:,.2f}\n"
+            f"  Total Assets: ${balances['checking_balance'] + balances['savings_balance']:,.2f}\n"
+        )
+
+    assessment_request += "\nPayment History (Last 6 Months):\n"
+    for p in history[:6]:
         status = "ON TIME" if p["on_time"] else "LATE"
         assessment_request += (
             f"  {p['month']}: Due ${p['amount_due']:,.2f}, "
@@ -215,7 +314,6 @@ def request_credit_assessment(
                 if assessment_text:
                     return assessment_text
 
-            # Try artifacts if no status message
             artifacts = task_result.get("artifacts", [])
             for artifact in artifacts:
                 for part in artifact.get("parts", []):
@@ -225,18 +323,26 @@ def request_credit_assessment(
         return f"Credit Assessment Agent response: {json.dumps(result, indent=2)}"
 
     except httpx.ConnectError:
-        # Fallback: perform local assessment if A2A is unavailable
-        return _local_assessment(customer, requested_new_limit)
+        return _local_assessment(customer, balances, history, requested_new_limit)
     except Exception as e:
-        return f"Error contacting Credit Assessment Agent: {e}. Performing local assessment.\n\n{_local_assessment(customer, requested_new_limit)}"
+        return (
+            f"Error contacting Credit Assessment Agent: {e}. "
+            f"Performing local assessment.\n\n"
+            f"{_local_assessment(customer, balances, history, requested_new_limit)}"
+        )
 
 
-def _local_assessment(customer: dict, requested_new_limit: float) -> str:
+def _local_assessment(
+    customer: dict,
+    balances: dict | None,
+    history: list[dict],
+    requested_new_limit: float,
+) -> str:
     """Fallback local credit assessment when the A2A agent is unreachable."""
     score = customer["credit_score"]
     dti = customer["monthly_debt_payments"] * 12 / customer["annual_income"]
-    on_time = sum(1 for p in customer["payment_history"] if p["on_time"])
-    total = len(customer["payment_history"])
+    on_time = sum(1 for p in history if p["on_time"])
+    total = len(history)
     on_time_rate = on_time / total if total > 0 else 0
     increase_pct = (
         (requested_new_limit - customer["current_credit_limit"])
@@ -285,6 +391,9 @@ banking_tools = [
     get_customer_profile,
     get_credit_score,
     get_payment_history,
+    get_account_balances,
+    get_recent_transactions,
+    get_credit_limit_change_history,
     request_credit_assessment,
     update_credit_limit,
 ]

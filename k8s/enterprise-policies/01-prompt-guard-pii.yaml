@@ -1,0 +1,95 @@
+##############################################################################
+# 1. PROMPT GUARD / PII PROTECTION
+#
+# API Group:   enterpriseagentgateway.solo.io/v1alpha1
+# Kind:        EnterpriseAgentgatewayPolicy
+#
+# Purpose:     Block requests containing SSN, credit card numbers, phone
+#              numbers, and email addresses. Mask any credit card or SSN
+#              data that leaks in LLM responses.
+#
+# Banking Use Case:
+#   - Prevents customers or agents from accidentally sending PII (SSN,
+#     credit card numbers) in prompts to the LLM.
+#   - Masks any PII in responses so it never reaches the end user.
+#   - Uses built-in regex patterns: CreditCard, Ssn, PhoneNumber, Email.
+#   - Custom regex patterns can also be added for account numbers.
+#
+# Docs: https://docs.solo.io/agentgateway/2.1.x/llm/prompt-guards/
+##############################################################################
+---
+# REQUEST-SIDE: Reject prompts that contain sensitive financial data
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-prompt-guard-request
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: pii-protection
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: openai
+  backend:
+    ai:
+      promptGuard:
+        request:
+          # Block requests containing literal PII strings
+          - response:
+              message: "BLOCKED: Your request contains sensitive financial data (credit card number). Please remove PII before submitting."
+            regex:
+              action: Reject
+              builtins:
+                - CreditCard
+          - response:
+              message: "BLOCKED: Your request contains a Social Security Number. SSNs must never be sent to AI models."
+            regex:
+              action: Reject
+              builtins:
+                - Ssn
+          # Custom pattern for bank account numbers (e.g., ACCT-XXXXXX)
+          - response:
+              message: "BLOCKED: Your request contains a bank account number. Please remove account numbers before submitting."
+            regex:
+              action: Reject
+              matches:
+                - "\\b\\d{8,17}\\b"
+                - "ACCT-\\d+"
+                - "account\\s*#?\\s*\\d{6,}"
+---
+# RESPONSE-SIDE: Mask any PII that slips through in LLM responses
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-prompt-guard-response
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: pii-protection
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: openai
+  backend:
+    ai:
+      promptGuard:
+        response:
+          - regex:
+              builtins:
+                - CreditCard
+              action: Mask
+          - regex:
+              builtins:
+                - Ssn
+              action: Mask
+          - regex:
+              builtins:
+                - PhoneNumber
+              action: Mask
+          - regex:
+              builtins:
+                - Email
+              action: Mask

@@ -10,8 +10,8 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/bank-credit-limit-agent
+  REGISTRY: docker.io
+  IMAGE_NAME: sebbycorp/bank-credit-limit-agent
 
 jobs:
   build-and-push:

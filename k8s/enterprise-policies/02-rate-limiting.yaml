@@ -1,0 +1,146 @@
+##############################################################################
+# 2. RATE LIMITING
+#
+# API Groups:
+#   - ratelimit.solo.io/v1alpha1          (RateLimitConfig)
+#   - enterpriseagentgateway.solo.io/v1alpha1  (EnterpriseAgentgatewayPolicy)
+#
+# Purpose:     Enforce per-user token-based and request-based rate limits
+#              to control costs and prevent abuse of the credit limit agent.
+#
+# Banking Use Case:
+#   - Token-based rate limiting ensures no single customer/banker can
+#     exhaust the LLM budget with expensive prompts.
+#   - Request-based rate limiting prevents brute-force abuse of the
+#     credit limit increase workflow.
+#   - Per-user tracking via X-User-ID header enables individual budget caps.
+#   - Global gateway rate limit provides a safety net across all routes.
+#
+# Docs: https://docs.solo.io/agentgateway/2.1.x/llm/rate-limit/
+##############################################################################
+---
+# Per-user TOKEN-BASED rate limit: 500 tokens/minute per banker
+apiVersion: ratelimit.solo.io/v1alpha1
+kind: RateLimitConfig
+metadata:
+  name: bank-agent-token-limit
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+spec:
+  raw:
+    descriptors:
+      - key: X-User-ID
+        rateLimit:
+          unit: MINUTE
+          requestsPerUnit: 500
+    rateLimits:
+      - actions:
+          - requestHeaders:
+              descriptorKey: "X-User-ID"
+              headerName: "X-User-ID"
+        type: TOKEN
+---
+# Per-user REQUEST-BASED rate limit: 10 requests/minute per banker
+apiVersion: ratelimit.solo.io/v1alpha1
+kind: RateLimitConfig
+metadata:
+  name: bank-agent-request-limit
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+spec:
+  raw:
+    descriptors:
+      - key: X-User-ID
+        rateLimit:
+          unit: MINUTE
+          requestsPerUnit: 10
+    rateLimits:
+      - actions:
+          - requestHeaders:
+              descriptorKey: "X-User-ID"
+              headerName: "X-User-ID"
+        type: REQUEST
+---
+# Global gateway rate limit: 100 requests/minute across all routes
+apiVersion: ratelimit.solo.io/v1alpha1
+kind: RateLimitConfig
+metadata:
+  name: bank-gateway-global-limit
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+spec:
+  raw:
+    descriptors:
+      - key: generic_key
+        value: counter
+        rateLimit:
+          requestsPerUnit: 100
+          unit: MINUTE
+    rateLimits:
+      - actions:
+          - genericKey:
+              descriptorValue: counter
+        type: REQUEST
+---
+# Apply token-based rate limit to OpenAI route (credit limit agent LLM calls)
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-agent-token-rate-limit
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: rate-limiting
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: openai
+  traffic:
+    entRateLimit:
+      global:
+        rateLimitConfigRefs:
+          - name: bank-agent-token-limit
+---
+# Apply request-based rate limit to OpenAI route
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-agent-request-rate-limit
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: rate-limiting
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: openai
+  traffic:
+    entRateLimit:
+      global:
+        rateLimitConfigRefs:
+          - name: bank-agent-request-limit
+---
+# Apply global rate limit to the entire gateway
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-gateway-global-rate-limit
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: rate-limiting
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agentgateway-proxy
+  traffic:
+    entRateLimit:
+      global:
+        rateLimitConfigRefs:
+          - name: bank-gateway-global-limit

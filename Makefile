@@ -1,4 +1,4 @@
-IMAGE_REPO ?= ghcr.io/professorseb/bank-credit-limit-agent
+IMAGE_REPO ?= sebbycorp/bank-credit-limit-agent
 IMAGE_TAG  ?= latest
 IMAGE      := $(IMAGE_REPO):$(IMAGE_TAG)
 

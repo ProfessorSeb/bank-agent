@@ -1,0 +1,81 @@
+##############################################################################
+# 7. CSRF + CORS PROTECTION
+#
+# API Group:   enterpriseagentgateway.solo.io/v1alpha1
+# Kind:        EnterpriseAgentgatewayPolicy
+#
+# Purpose:     Protect the bank agent gateway from Cross-Site Request
+#              Forgery attacks and enforce strict CORS policies for
+#              browser-based access (kagent UI).
+#
+# Banking Use Case:
+#   - CSRF protection prevents malicious sites from tricking bankers
+#     into submitting unauthorized credit limit changes.
+#   - CORS ensures only the bank's internal domains can access the
+#     agent API from browser-based UIs.
+#   - Critical for PCI-DSS and SOX compliance in banking environments.
+#
+# Docs:
+#   CSRF: https://docs.solo.io/agentgateway/2.1.x/security/csrf/
+#   CORS: https://docs.solo.io/agentgateway/2.1.x/security/cors/
+##############################################################################
+---
+# CSRF Protection
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-csrf-protection
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: web-security
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agentgateway-proxy
+  traffic:
+    csrf:
+      additionalOrigins:
+        # Only bank-owned domains are allowed
+        - bank.example.com
+        - kagent.bank.example.com
+        - admin.bank.example.com
+---
+# CORS Policy
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-cors-policy
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: web-security
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agentgateway-proxy
+  traffic:
+    cors:
+      allowCredentials: true
+      allowHeaders:
+        - "Origin"
+        - "Authorization"
+        - "Content-Type"
+        - "X-User-ID"
+        - "X-Customer-ID"
+        - "X-Agent-Name"
+        - "X-User-Role"
+      allowMethods:
+        - "GET"
+        - "POST"
+        - "OPTIONS"
+      allowOrigins:
+        - "https://bank.example.com"
+        - "https://kagent.bank.example.com"
+        - "https://admin.bank.example.com"
+      exposeHeaders:
+        - "X-Request-ID"
+        - "X-Trace-ID"
+      maxAge: 3600

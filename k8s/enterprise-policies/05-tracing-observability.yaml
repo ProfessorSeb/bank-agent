@@ -1,0 +1,70 @@
+##############################################################################
+# 5. TRACING / OBSERVABILITY (OpenTelemetry)
+#
+# API Group:   enterpriseagentgateway.solo.io/v1alpha1
+# Kind:        EnterpriseAgentgatewayPolicy
+#
+# Purpose:     Enable distributed tracing via OpenTelemetry to track
+#              every credit limit request through the full agent chain:
+#              User -> Bank Agent -> A2A -> Credit Assessment Agent -> LLM
+#
+# Banking Use Case:
+#   - Full end-to-end tracing of credit decisions for audit trails.
+#   - Custom attributes capture banker ID, customer ID, and agent names.
+#   - Traces exported to OTel Collector -> Tempo -> Grafana for
+#     visualization and compliance reporting.
+#   - Supports the bank's regulatory requirement for decision traceability.
+#
+# Docs: https://docs.solo.io/agentgateway/2.1.x/observability/tracing/
+#       https://docs.solo.io/agentgateway/2.1.x/observability/otel-stack/
+##############################################################################
+---
+# Tracing policy: capture all requests with banking context attributes
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-agent-tracing
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: observability
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: agentgateway-proxy
+      group: gateway.networking.k8s.io
+  frontend:
+    tracing:
+      backendRef:
+        name: opentelemetry-collector-traces
+        namespace: telemetry
+        port: 4317
+      protocol: GRPC
+      # Sample 100% of requests for full audit trail (banking compliance)
+      clientSampling: "true"
+      randomSampling: "true"
+      # Resource attributes for trace identification
+      resources:
+        - name: deployment.environment.name
+          expression: '"production"'
+        - name: service.name
+          expression: '"bank-credit-limit-agent"'
+        - name: service.version
+          expression: '"1.0.0"'
+        - name: service.namespace
+          expression: '"banking-agents"'
+      # Custom attributes extracted from request headers
+      attributes:
+        add:
+          # Track which banker made the request
+          - expression: 'request.headers["x-user-id"]'
+            name: banker.id
+          # Track which customer is being evaluated
+          - expression: 'request.headers["x-customer-id"]'
+            name: customer.id
+          # Track the request path for routing analysis
+          - expression: 'request.host'
+            name: request.host
+          # Track the agent being called
+          - expression: 'request.headers["x-agent-name"]'
+            name: agent.name

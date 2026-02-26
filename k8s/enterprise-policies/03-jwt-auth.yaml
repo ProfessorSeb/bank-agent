@@ -1,0 +1,88 @@
+##############################################################################
+# 3. AUTHENTICATION / AUTHORIZATION -- JWT + API Key Auth
+#
+# API Group:   enterpriseagentgateway.solo.io/v1alpha1
+# Kind:        EnterpriseAgentgatewayPolicy
+#
+# Purpose:     Require valid JWT tokens for all agent access, and
+#              optionally API key auth for service-to-service calls.
+#
+# Banking Use Case:
+#   - Bankers must authenticate via the bank's identity provider (Keycloak
+#     or any OIDC provider) before accessing the credit limit agent.
+#   - JWT Strict mode ensures unauthenticated requests are rejected (401).
+#   - Multiple providers can be configured (e.g., internal IdP + partner IdP).
+#   - API key auth can protect service-to-service calls (A2A protocol).
+#
+# Docs:
+#   JWT:     https://docs.solo.io/agentgateway/2.1.x/security/jwt/setup/
+#   API Key: https://docs.solo.io/agentgateway/2.1.x/security/extauth/apikey/
+##############################################################################
+---
+# JWT Authentication: Require valid bank-issued JWT for all gateway traffic
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-jwt-auth
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: authentication
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agentgateway-proxy
+  traffic:
+    jwtAuthentication:
+      # Strict = all requests MUST have a valid JWT
+      mode: Strict
+      providers:
+        - # Bank's internal OIDC identity provider
+          issuer: "https://auth.bank.example.com/realms/banking"
+          audiences:
+            - "bank-credit-limit-agent"
+            - "bank-agent-gateway"
+          jwks:
+            remote:
+              jwksPath: "/realms/banking/protocol/openid-connect/certs"
+              cacheDuration: "5m"
+              backendRef:
+                group: ""
+                kind: Service
+                name: keycloak
+                namespace: keycloak
+                port: 8080
+---
+# API Key Authentication: For service-to-service (A2A) calls
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bank-agent-apikey
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    auth-type: apikey
+type: extauth.solo.io/apikey
+stringData:
+  # Replace with a real generated API key
+  api-key: "REPLACE-WITH-GENERATED-API-KEY"
+---
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-a2a-apikey-auth
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: authentication
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agent-a2a-route
+  traffic:
+    apiKeyAuthentication:
+      mode: Strict
+      secretRef:
+        name: bank-agent-apikey

@@ -1,0 +1,50 @@
+##############################################################################
+# 8. TRANSFORMATIONS (Audit Headers + Request/Response Enrichment)
+#
+# API Group:   enterpriseagentgateway.solo.io/v1alpha1
+# Kind:        EnterpriseAgentgatewayPolicy
+#
+# Purpose:     Use CEL expression transformations to add audit trail
+#              headers, inject compliance metadata, and enrich responses
+#              with traceability information.
+#
+# Banking Use Case:
+#   - Every response includes audit headers: gateway timestamp,
+#     request path, trace ID, and agent version.
+#   - Supports compliance logging by enriching each LLM response
+#     with traceable metadata.
+#   - CEL expressions dynamically extract values from the request
+#     for correlation in log aggregation systems.
+#
+# Docs: https://docs.solo.io/agentgateway/2.1.x/traffic-management/transformations/
+##############################################################################
+---
+# Transformation: Add audit headers to every response
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bank-audit-headers
+  namespace: agentgateway-system
+  labels:
+    app: bank-credit-limit-agent
+    policy-type: audit
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agentgateway-proxy
+  traffic:
+    transformation:
+      response:
+        set:
+          # Add audit trail headers to every response
+          - name: x-bank-gateway
+            value: "'agentgateway-proxy'"
+          - name: x-bank-request-path
+            value: "request.path"
+          - name: x-bank-request-host
+            value: "request.host"
+          - name: x-bank-user-id
+            value: "request.headers['x-user-id']"
+          - name: x-bank-agent-version
+            value: "'v1.0.0'"
