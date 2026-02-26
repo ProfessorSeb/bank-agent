@@ -19,3 +19,9 @@ AGENT_NAMESPACE = os.environ.get("AGENT_NAMESPACE", "kagent")
 AGENT_NAME = "bank-credit-limit-agent"
 CREDIT_ASSESSMENT_AGENT = "credit-assessment-agent"
 SERVER_PORT = int(os.environ.get("PORT", "8080"))
+
+# Bank Web Backend API (source of truth for all banking data)
+BANK_API_URL = os.environ.get(
+    "BANK_API_URL",
+    "http://solo-bank-web.kagent.svc.cluster.local:8080",
+)

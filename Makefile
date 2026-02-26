@@ -1,34 +1,41 @@
-IMAGE_REPO ?= sebbycorp/bank-credit-limit-agent
-IMAGE_TAG  ?= latest
-IMAGE      := $(IMAGE_REPO):$(IMAGE_TAG)
+AGENT_IMAGE ?= sebbycorp/bank-credit-limit-agent
+WEB_IMAGE   ?= sebbycorp/solo-bank-web
+TAG         ?= latest
 
-.PHONY: build push run dev deploy argocd-apply
+.PHONY: build push build-web push-web build-all push-all run-web dev-web deploy
 
-## ---------- Container ----------
+## ---------- Agent container ----------
 
 build:
-	docker build -t $(IMAGE) .
+	docker build --platform linux/amd64 -t $(AGENT_IMAGE):$(TAG) .
 
 push: build
-	docker push $(IMAGE)
+	docker push $(AGENT_IMAGE):$(TAG)
 
-run: build
-	docker run --rm -it \
-		-p 8080:8080 \
-		-e OPENAI_API_KEY=$(OPENAI_API_KEY) \
-		-e LLM_BASE_URL=https://api.openai.com/v1 \
-		-e LLM_MODEL=gpt-4o-mini \
-		$(IMAGE)
+## ---------- Web container ----------
+
+build-web:
+	docker build --platform linux/amd64 -t $(WEB_IMAGE):$(TAG) -f Dockerfile.web .
+
+push-web: build-web
+	docker push $(WEB_IMAGE):$(TAG)
+
+## ---------- All ----------
+
+build-all: build build-web
+
+push-all: push push-web
 
 ## ---------- Local dev ----------
 
-dev:
-	cd src && uvicorn app:app --host 0.0.0.0 --port 8080 --reload
+run-web:
+	cd web && uvicorn app:app --host 0.0.0.0 --port 8080 --reload
+
+dev-agent:
+	cd src && BANK_API_URL=http://localhost:8080 uvicorn app:app --host 0.0.0.0 --port 8081 --reload
 
 ## ---------- Kubernetes ----------
 
 deploy:
 	kubectl apply -k k8s/agents/
-
-argocd-apply:
-	kubectl apply -f k8s/argocd/bank-agents-application.yaml
+	kubectl apply -k k8s/web/

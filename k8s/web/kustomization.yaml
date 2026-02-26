@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deployment.yaml
+
+commonLabels:
+  app.kubernetes.io/name: solo-bank-web
+  app.kubernetes.io/component: web
+  app.kubernetes.io/part-of: bank-credit-limit-demo
+
+namespace: kagent

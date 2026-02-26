@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solo-bank-web
+  namespace: kagent
+  labels:
+    app: solo-bank-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: solo-bank-web
+  template:
+    metadata:
+      labels:
+        app: solo-bank-web
+    spec:
+      containers:
+      - name: web
+        image: sebbycorp/solo-bank-web:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: BANK_DB_PATH
+          value: /data/bank.db
+        - name: KAGENT_CONTROLLER_URL
+          value: "http://kagent-controller.kagent.svc.cluster.local:8083"
+        - name: AGENT_NAMESPACE
+          value: "kagent"
+        - name: CREDIT_AGENT_NAME
+          value: "bank-credit-limit-agent"
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+        - name: bank-data
+          mountPath: /data
+      volumes:
+      - name: bank-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: solo-bank-web
+  namespace: kagent
+  labels:
+    app: solo-bank-web
+spec:
+  type: NodePort
+  selector:
+    app: solo-bank-web
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
