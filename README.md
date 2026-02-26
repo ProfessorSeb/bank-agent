@@ -1,21 +1,28 @@
 # Solo Bank — AI-Powered Credit Limit Agent Demo
 
-An interactive bank demo featuring an AI agent that processes credit limit increases, with a full web frontend, SQLite backend, and enterprise security policies — all deployed on Kubernetes via ArgoCD.
+An interactive bank demo featuring an AI agent that processes credit limit increases, with a two-portal web frontend, SQLite backend, and enterprise security policies — all deployed on Kubernetes via ArgoCD.
 
 ## Architecture
 
 ```
-                              Solo Bank Website
-                              (FastAPI + HTML/JS)
-                            ┌─────────────────────┐
-                  Browser ──┤  solo-bank-web:8080  │
-                            │  - Dashboard         │
-                            │  - Transfers         │
-                            │  - Approvals         │
-                            │  - AI Chat           │
-                            │  - SQLite DB         │
-                            └────────┬────────────┘
-                                     │ A2A
+                          Solo Bank Website (K8s NodePort :31691)
+                          ┌────────────────────────────────────┐
+                Browser ──┤  solo-bank-web:8080                │
+                          │  ┌──────────────────────────────┐  │
+                          │  │ Customer Portal              │  │
+                          │  │  - Dashboard (balances)      │  │
+                          │  │  - Transaction History       │  │
+                          │  │  - Credit Info               │  │
+                          │  ├──────────────────────────────┤  │
+                          │  │ Agent / Admin Portal         │  │
+                          │  │  - AI Agent Chat             │  │
+                          │  │  - Approvals (approve/deny)  │  │
+                          │  │  - Transfer Funds            │  │
+                          │  │  - Audit Log                 │  │
+                          │  └──────────────────────────────┘  │
+                          │  SQLite DB (source of truth)       │
+                          └──────────┬─────────────────────────┘
+                                     │ A2A (JSON-RPC)
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │  kagent (Kubernetes)                                                 │
@@ -23,19 +30,17 @@ An interactive bank demo featuring an AI agent that processes credit limit incre
 │  ┌──────────────────────────┐  A2A  ┌───────────────────────────┐   │
 │  │ Bank Credit Limit Agent  │──────▶│ Credit Assessment Agent   │   │
 │  │ (BYO - LangChain)        │       │ (Declarative - kagent)    │   │
-│  │ sebbycorp/bank-credit-   │       │ Risk evaluation via LLM   │   │
-│  │ limit-agent:latest       │       └──────────┬────────────────┘   │
-│  │                          │                   │                    │
-│  │ Tools:                   │                   │                    │
+│  │                          │       │ Risk evaluation via LLM   │   │
+│  │ Tools:                   │       └──────────┬────────────────┘   │
 │  │  - get_customer_profile  │                   │                    │
 │  │  - get_account_balances  │                   │                    │
 │  │  - get_recent_txns       │                   │                    │
 │  │  - transfer_funds        │                   │                    │
-│  │  - update_credit_limit   │                   │                    │
-│  │  - request_credit_assess │                   │                    │
-│  └──────────┬───────────────┘                   │                    │
-│             │                                   │                    │
-│             ▼                                   ▼                    │
+│  │  - update_credit_limit   │─── calls ──▶ Web Backend REST API     │
+│  │  - request_credit_assess │                                        │
+│  └──────────────────────────┘                                        │
+│             │                                                        │
+│             ▼                                                        │
 │  ┌──────────────────────────────────────────────────────────────┐    │
 │  │  AgentGateway Proxy (agentgateway-system)                    │    │
 │  │  llm-agentgateway model → OpenAI via gateway                 │    │
@@ -45,14 +50,40 @@ An interactive bank demo featuring an AI agent that processes credit limit incre
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
+## Access the Website
+
+The Solo Bank website runs in K8s and is accessible via NodePort:
+
+```
+http://<any-node-ip>:31691/
+```
+
+On the maniak-rooster cluster:
+```
+http://172.16.10.130:31691/
+```
+
+## Two-Portal Design
+
+### Customer Portal
+- **Dashboard** — Account cards (checking, savings, credit), recent transactions
+- **Transactions** — Full transaction history with balances
+- **Credit Info** — Credit score, utilization, DTI ratio, credit limit history
+
+### Agent / Admin Portal
+- **AI Agent Chat** — Chat with the Bank Credit Limit Agent to request credit limit increases
+- **Approvals** — Review and approve/deny pending large transactions and wire transfers
+- **Transfer Funds** — Transfer money between customer accounts
+- **Audit Log** — Credit limit change history with assessor info, all transactions
+
 ## Components
 
 | Component | Type | Image | Description |
 |---|---|---|---|
-| `solo-bank-web` | Deployment + Service | `sebbycorp/solo-bank-web` | Bank website (FastAPI + SQLite) |
+| `solo-bank-web` | Deployment + NodePort | `sebbycorp/solo-bank-web` | Bank website (FastAPI + SQLite) |
 | `bank-credit-limit-agent` | BYO Agent (LangChain) | `sebbycorp/bank-credit-limit-agent` | AI agent for credit decisions |
 | `credit-assessment-agent` | Declarative Agent | kagent built-in | Risk assessor called via A2A |
-| Enterprise Policies | 15 AgentGateway policies | — | PII, rate limits, auth, compliance |
+| Enterprise Policies | AgentGateway policies | — | PII, rate limits, auth, compliance |
 
 ## Demo Customers
 
@@ -68,10 +99,10 @@ Each customer has checking, savings, and credit card accounts with realistic bal
 ## Two Agent Scenarios
 
 ### 1. User → Agent (via website)
-User opens Solo Bank website → goes to Credit Limit tab → chats with the AI agent → agent pulls customer data from the bank backend API → requests assessment → applies decision.
+User opens Solo Bank website → switches to Agent/Admin Portal → chats with the AI agent → agent pulls customer data from the bank backend API → calls Credit Assessment Agent via A2A → applies approved credit limit changes → changes reflect immediately in the Customer Portal.
 
 ### 2. Agent → Agent (A2A)
-Bank Credit Limit Agent calls `request_credit_assessment` tool → sends A2A `tasks/send` to Credit Assessment Agent → gets structured risk evaluation → acts on recommendation.
+Bank Credit Limit Agent calls `request_credit_assessment` tool → sends A2A `tasks/send` to Credit Assessment Agent via kagent controller → gets structured risk evaluation → acts on recommendation → updates credit limit via web backend API.
 
 ## Deployment (via ArgoCD through k8s-rooster)
 
@@ -93,17 +124,22 @@ make run-web
 # Run the agent locally (connects to local web backend)
 export OPENAI_API_KEY="your-key"
 make dev-agent
+
+# Or run via Docker
+docker run -d -p 9090:8080 \
+  -e KAGENT_CONTROLLER_URL=http://<node-ip>:31036 \
+  sebbycorp/solo-bank-web:latest
 ```
 
 ## Build & Push
 
 ```bash
 # Build and push all containers
-make push-all
+make push-all TAG=<commit-sha>
 
 # Or individually
-make push       # agent only
-make push-web   # web only
+make push TAG=<sha>       # agent only
+make push-web TAG=<sha>   # web only
 ```
 
 ## Enterprise Security Policies
@@ -127,7 +163,7 @@ bank-agent/
 ├── web/                    # Solo Bank website
 │   ├── app.py              #   FastAPI backend + REST API
 │   ├── database.py         #   SQLite database (source of truth)
-│   └── static/             #   HTML/CSS/JS frontend
+│   └── static/             #   HTML/CSS/JS frontend (two-portal)
 ├── src/                    # LangChain credit limit agent
 │   ├── app.py              #   KAgentApp entry point
 │   ├── graph.py            #   LangGraph reactive agent
@@ -135,7 +171,7 @@ bank-agent/
 │   └── config.py           #   Environment config
 ├── k8s/
 │   ├── agents/             #   kagent Agent CRDs
-│   ├── web/                #   Web app Deployment + Service
+│   ├── web/                #   Web app Deployment + NodePort Service
 │   └── enterprise-policies/#   AgentGateway security policies
 ├── Dockerfile              # Agent container
 ├── Dockerfile.web          # Web app container
