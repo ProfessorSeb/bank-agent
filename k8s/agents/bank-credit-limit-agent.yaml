@@ -23,9 +23,9 @@ spec:
             name: kagent-openai
             key: OPENAI_API_KEY
       - name: LLM_BASE_URL
-        value: "http://agentgateway-proxy.agentgateway-system.svc.cluster.local:8080/openai"
+        value: "http://bank-gateway-proxy.agentgateway-system.svc.cluster.local:8082/openai"
       - name: LLM_MODEL
-        value: "gpt-4o-mini-2024-07-18"
+        value: "gpt-4.1"
       - name: KAGENT_CONTROLLER_URL
         value: "http://kagent-controller.kagent.svc.cluster.local:8083"
       - name: AGENT_NAMESPACE

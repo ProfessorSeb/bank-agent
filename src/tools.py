@@ -266,6 +266,29 @@ def _local_assessment(customer: dict, requested_new_limit: float, dti: float) ->
     }, indent=2)
 
 
+@tool
+def create_credit_limit_approval(
+    customer_id: str, requested_limit: float, reason: str, risk_summary: str,
+) -> str:
+    """Create a pending credit limit approval for admin manual review.
+    Use this when the customer does NOT meet auto-approve criteria.
+
+    Args:
+        customer_id: The customer ID (e.g. CUST-1001)
+        requested_limit: The requested new credit limit amount
+        reason: Why the customer is requesting an increase
+        risk_summary: Summary of risk factors from the credit assessment
+    """
+    customer = _bank_api("GET", f"/api/customers/{customer_id}")
+    result = _bank_api("POST", f"/api/customers/{customer_id}/credit-limit-approval", {
+        "requested_new_limit": requested_limit,
+        "current_limit": customer["current_credit_limit"],
+        "reason": reason,
+        "assessment_summary": risk_summary,
+    })
+    return json.dumps(result, indent=2)
+
+
 banking_tools = [
     get_customer_profile,
     get_credit_score,
@@ -276,4 +299,5 @@ banking_tools = [
     transfer_funds,
     request_credit_assessment,
     update_credit_limit,
+    create_credit_limit_approval,
 ]

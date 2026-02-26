@@ -304,21 +304,79 @@ def resolve_approval(approval_id: int, action: str, resolved_by: str = "customer
         )
 
         if status == "APPROVED":
-            # Execute the approved transaction
-            customer = conn.execute("SELECT * FROM customers WHERE id = ?", (row["customer_id"],)).fetchone()
-            checking = conn.execute(
-                "SELECT * FROM accounts WHERE customer_id = ? AND type = 'checking'",
-                (row["customer_id"],),
-            ).fetchone()
-            if checking:
-                new_balance = checking["balance"] - row["amount"]
-                conn.execute("UPDATE accounts SET balance = ? WHERE id = ?", (new_balance, checking["id"]))
-                conn.execute(
-                    "INSERT INTO transactions (account_id,customer_id,timestamp,type,description,amount,balance_after) VALUES (?,?,?,?,?,?,?)",
-                    (checking["id"], row["customer_id"], now, row["type"], f"Approved: {row['description']}", -row["amount"], new_balance),
+            if row["type"] == "CREDIT_LIMIT_INCREASE":
+                # Apply credit limit change
+                result = update_credit_limit(
+                    row["customer_id"], row["amount"],
+                    f"Admin approved: {row['description']}", "admin",
                 )
+                if "error" in result:
+                    return result
+            else:
+                # Execute the approved transaction (wire transfer, large purchase)
+                checking = conn.execute(
+                    "SELECT * FROM accounts WHERE customer_id = ? AND type = 'checking'",
+                    (row["customer_id"],),
+                ).fetchone()
+                if checking:
+                    new_balance = checking["balance"] - row["amount"]
+                    conn.execute("UPDATE accounts SET balance = ? WHERE id = ?", (new_balance, checking["id"]))
+                    conn.execute(
+                        "INSERT INTO transactions (account_id,customer_id,timestamp,type,description,amount,balance_after) VALUES (?,?,?,?,?,?,?)",
+                        (checking["id"], row["customer_id"], now, row["type"], f"Approved: {row['description']}", -row["amount"], new_balance),
+                    )
+        elif status == "DENIED" and row["type"] == "CREDIT_LIMIT_INCREASE":
+            # Record denial in credit limit history
+            conn.execute(
+                "UPDATE credit_limit_changes SET status = 'DENIED' WHERE customer_id = ? AND new_limit = ? AND status = 'PENDING_REVIEW'",
+                (row["customer_id"], row["amount"]),
+            )
 
     return {"status": status, "approval_id": approval_id, "timestamp": now}
+
+
+def get_all_pending_approvals() -> list[dict]:
+    with get_db() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT pa.*, c.name as customer_name FROM pending_approvals pa "
+            "JOIN customers c ON pa.customer_id = c.id "
+            "WHERE pa.status = 'PENDING' ORDER BY pa.timestamp DESC",
+        ).fetchall()]
+
+
+def create_credit_limit_approval(
+    customer_id: str, requested_new_limit: float, current_limit: float,
+    reason: str, assessment_summary: str,
+) -> dict:
+    now = datetime.now(timezone.utc).isoformat()
+    with get_db() as conn:
+        customer = conn.execute("SELECT * FROM customers WHERE id = ?", (customer_id,)).fetchone()
+        if not customer:
+            return {"error": "Customer not found"}
+
+        description = (
+            f"Credit limit increase: ${current_limit:,.2f} → ${requested_new_limit:,.2f}. "
+            f"Reason: {reason}. Assessment: {assessment_summary}"
+        )
+        conn.execute(
+            "INSERT INTO pending_approvals (customer_id,type,description,amount,timestamp,status) VALUES (?,?,?,?,?,?)",
+            (customer_id, "CREDIT_LIMIT_INCREASE", description, requested_new_limit, now, "PENDING"),
+        )
+        approval_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        # Record in credit_limit_changes as PENDING
+        conn.execute(
+            "INSERT INTO credit_limit_changes (customer_id,timestamp,old_limit,new_limit,reason,status,assessed_by) VALUES (?,?,?,?,?,?,?)",
+            (customer_id, now, current_limit, requested_new_limit, reason, "PENDING_REVIEW", "credit-assessment-agent"),
+        )
+
+    return {
+        "status": "PENDING_REVIEW",
+        "approval_id": approval_id,
+        "customer_id": customer_id,
+        "requested_limit": requested_new_limit,
+        "message": f"Request submitted for admin review (approval #{approval_id})",
+    }
 
 
 def get_credit_limit_history(customer_id: str) -> list[dict]:
