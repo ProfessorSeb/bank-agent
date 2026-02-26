@@ -14,6 +14,8 @@ BANK_API_URL = os.environ.get("BANK_API_URL", "http://solo-bank-web.kagent.svc.c
 mcp = FastMCP(
     "Bank MCP Server",
     instructions="Banking tools for Solo Bank. Use these to look up customers, check balances, transfer funds, update credit limits, and manage approvals.",
+    host="0.0.0.0",
+    port=3001,
 )
 
 
@@ -198,4 +200,4 @@ def list_customers() -> str:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=3001)
+    mcp.run(transport="streamable-http")
