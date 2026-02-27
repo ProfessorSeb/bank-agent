@@ -112,7 +112,7 @@ metadata:
     app: bank-credit-limit-agent
 spec:
   parentRefs:
-    - name: agentgateway-proxy
+    - name: bank-gateway-proxy
       namespace: agentgateway-system
   rules:
     - matches:

@@ -98,7 +98,7 @@ spec:
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
-      name: openai
+      name: bank-openai
   traffic:
     entRateLimit:
       global:
@@ -118,7 +118,7 @@ spec:
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
-      name: openai
+      name: bank-openai
   traffic:
     entRateLimit:
       global:
@@ -138,7 +138,7 @@ spec:
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: Gateway
-      name: agentgateway-proxy
+      name: bank-gateway-proxy
   traffic:
     entRateLimit:
       global:

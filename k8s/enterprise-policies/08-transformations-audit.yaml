@@ -32,14 +32,14 @@ spec:
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: Gateway
-      name: agentgateway-proxy
+      name: bank-gateway-proxy
   traffic:
     transformation:
       response:
         set:
           # Add audit trail headers to every response
           - name: x-bank-gateway
-            value: "'agentgateway-proxy'"
+            value: "'bank-gateway-proxy'"
           - name: x-bank-request-path
             value: "request.path"
           - name: x-bank-request-host

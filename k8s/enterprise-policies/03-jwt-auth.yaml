@@ -32,7 +32,7 @@ spec:
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: Gateway
-      name: agentgateway-proxy
+      name: bank-gateway-proxy
   traffic:
     jwtAuthentication:
       # Strict = all requests MUST have a valid JWT

@@ -31,7 +31,7 @@ metadata:
 spec:
   targetRefs:
     - kind: Gateway
-      name: agentgateway-proxy
+      name: bank-gateway-proxy
       group: gateway.networking.k8s.io
   frontend:
     tracing:
